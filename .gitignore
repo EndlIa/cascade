@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 数据集产物：由 `npm run make` 产出，不入库
+public/data/
+
+# 环境变量：唯一入库的是模板
+.env
+.env.*
+!.env.example
+
+.DS_Store
+.idea/
+.vscode/

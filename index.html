@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>珞珈化工园区 · 安全与运行态势</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #dbe3ee;
+        --muted: #7c8899;
+        --dim: #5b6675;
+        --panel: rgba(11, 15, 22, 0.86);
+        --panel-solid: #0b0f16;
+        --line: rgba(255, 255, 255, 0.08);
+        --accent: #4aa8d8;
+        --danger: #ff4d43;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; overflow: hidden; }
+      body {
+        background: #070a0f;
+        color: var(--ink);
+        font: 13px/1.5 "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #map { position: absolute; inset: 0; }
+      #map .BMap_cpyCtrl, #map .anchorBL { filter: invert(1) hue-rotate(180deg); opacity: 0.55; }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+      #topbar {
+        position: absolute; top: 0; left: 0; right: 0; height: 58px;
+        display: flex; align-items: center; gap: 26px; padding: 0 18px;
+        background: linear-gradient(180deg, rgba(7, 10, 15, 0.96), rgba(7, 10, 15, 0.55));
+        border-bottom: 1px solid var(--line);
+        z-index: 20;
+      }
+      #brand { display: flex; align-items: baseline; gap: 10px; }
+      #brand .mark {
+        width: 8px; height: 8px; border-radius: 2px; background: var(--accent);
+        align-self: center; box-shadow: 0 0 12px rgba(74, 168, 216, 0.9);
+      }
+      #brand h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.04em; }
+      #brand .sub { color: var(--muted); font-size: 12px; letter-spacing: 0.12em; }
+
+      #kpis { display: flex; gap: 22px; margin-left: auto; }
+      #kpis > div { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+      #kpis b {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
+      }
+      #kpis span { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; }
+      #kpis .danger b { color: var(--danger); }
+
+      #clock {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: var(--muted); font-size: 13px; padding-left: 20px;
+        border-left: 1px solid var(--line); font-variant-numeric: tabular-nums;
+      }
+
+      #sidebar {
+        position: absolute; top: 74px; left: 14px; width: 196px;
+        padding: 12px 14px 14px; z-index: 15;
+      }
+      #sidebar h3 {
+        margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+        color: var(--dim); text-transform: uppercase;
+      }
+      #sidebar h3 + h3, #sidebar > h3:not(:first-child) { margin-top: 16px; }
+      #layer-list { list-style: none; margin: 0 0 4px; padding: 0; }
+      #layer-list li {
+        display: flex; align-items: center; gap: 9px; padding: 5px 0;
+        cursor: pointer; user-select: none; color: var(--ink);
+      }
+      #layer-list li .box {
+        width: 13px; height: 13px; border-radius: 3px; border: 1px solid #46505e;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 9px; color: #071018; flex: none;
+      }
+      #layer-list li[data-on="true"] .box { background: var(--accent); border-color: var(--accent); }
+      #layer-list li[data-on="false"] { color: var(--dim); }
+      #layer-list li .count { margin-left: auto; color: var(--dim); font-size: 11px; }
+
+      #legend ul { margin: 0; padding: 0; list-style: none; }
+      #legend h4 {
+        margin: 0 0 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em;
+        color: var(--dim); text-transform: uppercase;
+      }
+      #legend h4:not(:first-child) { margin-top: 10px; }
+      #legend li { display: flex; align-items: center; gap: 9px; padding: 2px 0; font-size: 12px; }
+      #legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
+      #legend hr { border: 0; border-top: 1px solid var(--line); margin: 9px 0; }
+
+      #metrics {
+        position: absolute; top: 74px; right: 14px; width: 246px;
+        padding: 12px 14px; z-index: 15;
+      }
+      #metrics h3 {
+        margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+        color: var(--dim); text-transform: uppercase;
+      }
+      #hud {
+        white-space: pre-wrap; font-size: 12px; line-height: 1.7;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-variant-numeric: tabular-nums; color: #aab6c6;
+      }
+      #hud b { color: var(--ink); font-weight: 600; }
+      #hud .bad { color: var(--danger); }
+      #hud .hint { color: var(--dim); }
+      #popover {
+        position: absolute; display: none; z-index: 25; min-width: 178px; max-width: 250px;
+        padding: 11px 13px 12px; pointer-events: none;
+      }
+      #popover::after {
+        content: ''; position: absolute; left: 20px; bottom: -5px;
+        width: 9px; height: 9px; background: rgba(10, 14, 20, 0.92);
+        border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+        transform: rotate(45deg);
+      }
+      #popover[data-side="below"]::after {
+        top: -5px; bottom: auto;
+        border: 0; border-left: 1px solid var(--line); border-top: 1px solid var(--line);
+      }
+      #popover h3 {
+        margin: 0 0 7px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+        color: var(--dim); text-transform: uppercase;
+      }
+      #popover .row {
+        display: flex; justify-content: space-between; gap: 12px; padding: 2px 0;
+        font-size: 12px; color: var(--muted);
+      }
+      #popover .row b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+      #popover .row b.bad { color: var(--danger); }
+
+      #marquee {
+        position: absolute; display: none; pointer-events: none; z-index: 14;
+        border: 1px dashed rgba(126, 200, 255, 0.95);
+        background: rgba(126, 200, 255, 0.13);
+        border-radius: 2px;
+      }
+
+      #box-btn {
+        position: absolute; right: 14px; bottom: 88px; z-index: 16;
+        width: 38px; height: 38px; padding: 0; display: grid; place-items: center;
+        cursor: pointer; color: var(--muted);
+        transition: color 0.15s, background 0.15s, border-color 0.15s;
+      }
+      #box-btn:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.32); }
+      #box-btn[data-on="true"] { color: #08111b; background: #7ec8ff; border-color: #7ec8ff; }
+      #box-btn .ico {
+        width: 13px; height: 13px; border: 1.5px dashed currentColor; border-radius: 2px;
+      }
+
+      #console-btn {
+        position: absolute; right: 14px; bottom: 136px; z-index: 16;
+        width: 38px; height: 38px; padding: 0; display: grid; place-items: center;
+        cursor: pointer; color: var(--muted);
+        transition: color 0.15s, background 0.15s, border-color 0.15s;
+      }
+      #console-btn:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.32); }
+      #console-btn .bars { display: grid; gap: 3px; }
+      #console-btn .bars i { display: block; width: 13px; height: 1.5px; background: currentColor; border-radius: 1px; }
+
+      #console {
+        position: absolute; right: 14px; bottom: 184px; z-index: 18;
+        width: 238px; padding: 12px 13px 13px; display: none;
+      }
+      #console[data-open="true"] { display: block; }
+      #console h3 {
+        margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+        color: var(--dim); text-transform: uppercase;
+      }
+      #console .row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 3px 0; font-size: 12px; color: var(--muted);
+      }
+      #console select {
+        flex: 1; max-width: 124px; padding: 3px 5px;
+        font: inherit; font-size: 11px; color: var(--ink);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--line); border-radius: 5px;
+      }
+      #c-reload {
+        width: 100%; margin-top: 10px; padding: 7px 0; cursor: pointer;
+        font: inherit; font-size: 12px; letter-spacing: 0.04em; color: var(--muted);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--line); border-radius: 7px;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      #c-reload:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.3); }
+
+      #alarmbar {
+        position: absolute; left: 14px; right: 14px; bottom: 14px; height: 62px;
+        display: flex; align-items: center; gap: 14px; padding: 0 16px; z-index: 15;
+      }
+      #alarmbar .label {
+        display: flex; align-items: center; gap: 8px; flex: none;
+        font-size: 12px; letter-spacing: 0.1em; color: var(--muted);
+      }
+      #alarmbar .label .pip {
+        width: 7px; height: 7px; border-radius: 50%; background: var(--danger);
+        box-shadow: 0 0 10px rgba(255, 77, 67, 0.9);
+      }
+      #alarm-list {
+        display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden;
+        list-style: none; margin: 0; padding: 0; height: 100%; align-items: center;
+        scrollbar-width: thin;
+      }
+      #alarm-list li {
+        flex: none; display: flex; align-items: center; gap: 10px;
+        padding: 7px 13px; border: 1px solid rgba(255, 77, 67, 0.32);
+        border-radius: 8px; background: rgba(255, 77, 67, 0.07);
+        cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      }
+      #alarm-list li:hover { background: rgba(255, 77, 67, 0.16); border-color: rgba(255, 77, 67, 0.6); }
+      #alarm-list li .zone { color: var(--ink); font-size: 12px; }
+      #alarm-list li .t {
+        color: var(--muted); font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      #alarm-list li .lvl { color: var(--danger); font-size: 11px; letter-spacing: 0.06em; }
+
+      #boot {
+        position: absolute; inset: 0; display: grid; place-items: center;
+        background: #070a0f; z-index: 40; color: var(--muted);
+        font-size: 13px; letter-spacing: 0.08em; transition: opacity 0.4s;
+      }
+      #boot.gone { opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="marquee"></div>
+
+    <header id="topbar" class="panel" style="border-radius:0;border-left:0;border-right:0;border-top:0">
+      <div id="brand">
+        <span class="mark"></span>
+        <h1>珞珈化工园区</h1>
+        <span class="sub">安全与运行态势</span>
+      </div>
+      <div id="kpis">
+        <div><b id="kpi-points">—</b><span>测点</span></div>
+        <div><b id="kpi-buildings">—</b><span>装置 / 建筑</span></div>
+        <div><b id="kpi-vehicles">—</b><span>作业车辆</span></div>
+        <div class="danger"><b id="kpi-alarms">—</b><span>报警</span></div>
+      </div>
+      <div id="clock" class="mono">--:--:--</div>
+    </header>
+
+    <aside id="sidebar" class="panel">
+      <h3>图层</h3>
+      <ul id="layer-list"></ul>
+      <h3>图例</h3>
+      <div id="legend"></div>
+    </aside>
+
+    <aside id="metrics" class="panel">
+      <h3>运行指标</h3>
+      <div id="hud"></div>
+    </aside>
+
+    <div id="popover" class="panel"></div>
+
+    <div id="console" class="panel">
+      <h3>演示控制台</h3>
+      <div class="row"><span>网络限流</span><select id="c-net" title="修改后需点「重新加载数据」生效"></select></div>
+      <div class="row"><span>上传限流</span><select id="c-rate"></select></div>
+      <div class="row"><span>每帧上传</span><select id="c-frame"></select></div>
+      <div class="row"><span>LOD 预算</span><select id="c-lod"></select></div>
+      <div class="row"><span>底图</span><select id="c-basemap"></select></div>
+      <div class="row"><span>报警脉冲</span><select id="c-alarms"></select></div>
+      <button id="c-reload" type="button">重新加载数据</button>
+    </div>
+
+    <button id="console-btn" class="panel" type="button" title="演示控制台" aria-label="演示控制台">
+      <span class="bars"><i></i><i></i><i></i></span>
+    </button>
+
+    <button id="box-btn" class="panel" type="button"
+            title="框选测点（Shift+拖拽）" aria-label="框选测点"><span class="ico"></span></button>
+
+    <footer id="alarmbar" class="panel">
+      <div class="label"><span class="pip"></span>实时报警</div>
+      <ul id="alarm-list"></ul>
+    </footer>
+
+    <div id="boot">正在接入厂区数据…</div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

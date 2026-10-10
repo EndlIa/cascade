@@ -1,0 +1,23 @@
+{
+  "name": "cascade",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "基于百度地图 JSAPI WebGLCustomLayer 的海量空间数据流式渲染",
+  "scripts": {
+    "make": "node tools/make-dataset.mjs --out public/data/main --span 6 --polygons 900 --lines 900 --points 30000000",
+    "make:big": "node tools/make-dataset.mjs --out public/data/main --span 6 --polygons 1800 --lines 1800 --points 50000000",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tools/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "earcut": "^3.0.1"
+  }
+}
