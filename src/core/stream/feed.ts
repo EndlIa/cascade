@@ -24,7 +24,7 @@ export interface FeedOptions {
   onProgress?: (receivedBytes: number, features: number) => void;
   onDone?: (stats: FeedStats) => void;
   onPick?: (hit: PickHit | null) => void;
-  onSelect?: (count: number, ids: number[], points: ArrayBuffer) => void;
+  onSelect?: (count: number, ids: number[], points: ArrayBuffer, byStatus: number[]) => void;
   onAlarms?: (points: ArrayBuffer) => void;
   onError: (message: string) => void;
 }
@@ -108,6 +108,7 @@ export class DatasetFeed {
           message.count as number,
           message.ids as number[],
           message.points as ArrayBuffer,
+          message.byStatus as number[],
         );
         return;
       case 'alarms':

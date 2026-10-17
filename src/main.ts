@@ -161,9 +161,7 @@ function detailHtml (hit: PickHit | null, sensors: readonly SensorSpec[]): strin
   ].join('');
 }
 
-function selectionHtml (count: number, points: Uint8Array): string {
-  const byStatus = [0, 0, 0];
-  for (let at = 0; at + 7 < points.length; at += 8) byStatus[points[at + 5]] += 1;
+function selectionHtml (count: number, points: Uint8Array, byStatus: number[]): string {
   const shown = points.length / 8;
 
   return [
@@ -520,9 +518,9 @@ async function boot (): Promise<void> {
       else showPopover(popover, popupAnchor.x, popupAnchor.y, html);
       pendingPicks.shift()?.(hit);
     },
-    onSelect: (count, _ids, points) => {
+    onSelect: (count, _ids, points, byStatus) => {
       const bytes = new Uint8Array(points);
-      showPopover(popover, popupAnchor.x, popupAnchor.y, selectionHtml(count, bytes));
+      showPopover(popover, popupAnchor.x, popupAnchor.y, selectionHtml(count, bytes, byStatus));
       layers.highlight.reset();
       if (bytes.byteLength > 0 && layers.highlight.isReady) {
         layers.highlight.append(bytes, true);

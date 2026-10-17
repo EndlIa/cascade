@@ -29,6 +29,8 @@ let retainPoints = true;
 
 const retained: RetainedPoints[] = [];
 let nextId = 0;
+let alarmBytes: Uint8Array | null = null;
+let alarmIds: Int32Array | null = null;
 
 function post (message: FromWorker, transfer?: Transferable[]): void {
   if (transfer === undefined) self.postMessage(message);
@@ -148,7 +150,9 @@ async function run (baseUrl: string, given: DatasetManifest, netBytesPerSecond: 
   });
 
   const alarms = collectAlarms();
-  post({ type: 'alarms', points: alarms.buffer as ArrayBuffer }, [alarms.buffer as ArrayBuffer]);
+  alarmBytes = alarms.bytes;
+  alarmIds = alarms.ids;
+  post({ type: 'alarms', points: alarms.bytes.buffer as ArrayBuffer });
 }
 
 function pickInMeters (x: number, y: number, radiusM: number, ranges: Int32Array): PickHit | null {
@@ -158,13 +162,14 @@ function pickInMeters (x: number, y: number, radiusM: number, ranges: Int32Array
   return { x: hit.x, y: hit.y, geom: GEOM.POINTS, attrs: hit.attrs };
 }
 
-function collectAlarms (): Uint8Array {
+function collectAlarms (): { bytes: Uint8Array; ids: Int32Array } {
   let total = 0;
   for (const block of retained) {
     for (let i = 0; i < block.count; i++) if (block.attrs[i * 8 + 5] === 2) total += 1;
   }
 
   const out = new Uint8Array(total * 6);
+  const ids = new Int32Array(total);
   const view = new DataView(out.buffer);
   let at = 0;
   for (const block of retained) {
@@ -174,10 +179,11 @@ function collectAlarms (): Uint8Array {
       view.setInt16(at * 6 + 2, block.coords[i * 4 + 1], true);
       view.setUint8(at * 6 + 4, block.attrs[i * 8 + 4]);
       view.setUint8(at * 6 + 5, 2);
+      ids[at] = block.firstId + i;
       at += 1;
     }
   }
-  return out;
+  return { bytes: out, ids };
 }
 
 function resourceStats (): ResourceSummary {
@@ -199,20 +205,43 @@ function select (
   maxLng: number,
   maxLat: number,
   ranges: Int32Array,
-): { count: number; ids: number[]; points: Uint8Array } {
+): { count: number; ids: number[]; points: Uint8Array; byStatus: [number, number, number] } {
   const quantum = manifest?.quantum ?? 1;
   const [x0, y0] = llToMc(minLng, minLat);
   const [x1, y1] = llToMc(maxLng, maxLat);
-  return selectInBox(
-    retained,
-    quantum,
-    Math.min(x0, x1) - originMc[0],
-    Math.min(y0, y1) - originMc[1],
-    Math.max(x0, x1) - originMc[0],
-    Math.max(y0, y1) - originMc[1],
-    ranges,
-    SELECT_ID_LIMIT,
-  );
+  const loX = Math.min(x0, x1) - originMc[0];
+  const loY = Math.min(y0, y1) - originMc[1];
+  const hiX = Math.max(x0, x1) - originMc[0];
+  const hiY = Math.max(y0, y1) - originMc[1];
+
+  const result = selectInBox(retained, quantum, loX, loY, hiX, hiY, ranges, SELECT_ID_LIMIT);
+  if (alarmBytes === null || alarmIds === null) return result;
+
+  const view = new DataView(alarmBytes.buffer, alarmBytes.byteOffset, alarmBytes.byteLength);
+  const seen = new Set(result.ids);
+  const extra: number[] = [];
+  for (let i = 0; i < alarmIds.length; i += 1) {
+    const x = view.getInt16(i * 6, true) * quantum;
+    const y = view.getInt16(i * 6 + 2, true) * quantum;
+    if (x < loX || x > hiX || y < loY || y > hiY) continue;
+    if (seen.has(alarmIds[i])) continue;
+    result.count += 1;
+    result.byStatus[2] += 1;
+    result.ids.push(alarmIds[i]);
+    extra.push(i);
+  }
+
+  if (extra.length > 0) {
+    const merged = new Uint8Array(result.points.byteLength + extra.length * 8);
+    merged.set(result.points, 0);
+    let at = result.points.byteLength;
+    for (const i of extra) {
+      merged.set(alarmBytes.subarray(i * 6, i * 6 + 6), at);
+      at += 8;
+    }
+    result.points = merged;
+  }
+  return result;
 }
 
 self.onmessage = (event: MessageEvent<ToWorker>) => {
@@ -254,7 +283,7 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
       message.ranges,
     );
     post(
-      { type: 'select', count: result.count, ids: result.ids, points: result.points.buffer as ArrayBuffer },
+      { type: 'select', count: result.count, ids: result.ids, points: result.points.buffer as ArrayBuffer, byStatus: result.byStatus as unknown as number[] },
       [result.points.buffer as ArrayBuffer],
     );
   } catch (error: unknown) {

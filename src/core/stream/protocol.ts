@@ -47,7 +47,7 @@ export type FromWorker =
   | ChunkMessage
   | { type: 'done'; receivedBytes: number; features: number; elapsedMs: number; resource: ResourceSummary }
   | { type: 'pick'; hit: PickHit | null }
-  | { type: 'select'; count: number; ids: number[]; points: ArrayBuffer }
+  | { type: 'select'; count: number; ids: number[]; points: ArrayBuffer; byStatus: number[] }
   | { type: 'alarms'; points: ArrayBuffer }
   | { type: 'error'; message: string };
 

@@ -86,6 +86,7 @@ export interface BoxResult {
   count: number;
   ids: number[];
   points: Uint8Array;
+  byStatus: [number, number, number];
 }
 
 export function selectInBox (
@@ -101,6 +102,7 @@ export function selectInBox (
   let count = 0;
   const ids: number[] = [];
   const points = new Uint8Array(idLimit * 8);
+  const byStatus: [number, number, number] = [0, 0, 0];
   let filled = 0;
 
   scanDrawn(ranges, blocks, (id, i, block) => {
@@ -108,6 +110,7 @@ export function selectInBox (
     const y = block.coords[i * 4 + 1] * quantum;
     if (x < loX || x > hiX || y < loY || y > hiY) return;
     count += 1;
+    byStatus[block.attrs[i * 8 + 5]] += 1;
     if (ids.length < idLimit) {
       ids.push(id);
       points.set(block.attrs.subarray(i * 8, i * 8 + 8), filled * 8);
@@ -115,5 +118,5 @@ export function selectInBox (
     }
   });
 
-  return { count, ids, points: points.slice(0, filled * 8) };
+  return { count, ids, points: points.slice(0, filled * 8), byStatus };
 }
